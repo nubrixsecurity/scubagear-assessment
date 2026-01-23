@@ -119,28 +119,37 @@ Write-Host "SCuBA version:"
 Invoke-SCuBA -Version | Out-Host
 #endregion Install + init ScubaGear
 
-#region Run assessment
+#region Run assessment (force output to System32)
 Write-Host "Running SCuBA assessment (all products)..."
-Invoke-SCuBA -ProductNames *
-#endregion Run assessment
-
-#region Locate output folder in System32 for today
-$todayToken = Get-TodayToken
-$pattern = "M365BaselineConformance_{0}*" -f $todayToken
 
 $system32 = "$env:WINDIR\System32"
-Write-Host "Searching System32 for: $pattern"
+$priorLocation = Get-Location
 
-$matches = Get-ChildItem -Path $system32 -Directory -Filter $pattern -ErrorAction SilentlyContinue |
+try {
+    Set-Location -Path $system32
+
+    # Run assessment (drops M365BaselineConformance_* into System32)
+    Invoke-SCuBA -ProductNames * -Quiet
+}
+finally {
+    Set-Location -Path $priorLocation
+}
+#endregion Run assessment
+
+#region Locate output folder in System32 (latest run)
+$system32 = "$env:WINDIR\System32"
+Write-Host "Searching System32 for latest SCuBA output folder: M365BaselineConformance_*"
+
+$matches = Get-ChildItem -Path $system32 -Directory -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -like "M365BaselineConformance_*" } |
     Sort-Object LastWriteTime -Descending
 
 if (-not $matches -or $matches.Count -eq 0) {
-    throw "No SCuBA output folder found for today in $system32 matching: $pattern"
+    throw "No SCuBA output folder found in $system32 matching: M365BaselineConformance_*"
 }
 
 $sourceFolder = $matches | Select-Object -First 1
 Write-Host "Using SCuBA output folder: $($sourceFolder.FullName)"
-
 #endregion Locate output
 
 #region Copy output into RunRoot
@@ -686,3 +695,4 @@ if ($ExportPdf) {
     Write-Host "PDF created: $pdfPath"
 }
 #endregion Export PDF
+
