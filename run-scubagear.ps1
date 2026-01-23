@@ -56,10 +56,11 @@ $ErrorActionPreference = "Stop"
 
 #region Helpers
 function New-RunStamp {
-    # run-HHmmss (matches your example like run-192442)
-    return ("run-" + (Get-Date).ToString("HHmmss"))
+    # Run-YYYY_MM_DD_HH_mm_ss (similar to SCuBA naming)
+    return ("Run-" + (Get-Date).ToString("yyyy_MM_dd_HH_mm_ss"))
 }
 #endregion Helpers
+
 
 #region Paths
 $tempRoot   = Join-Path $env:TEMP "scuba"
@@ -136,3 +137,4 @@ finally {
     }
     #endregion Cleanup
 }
+
