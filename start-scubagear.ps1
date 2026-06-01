@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
-    [string]$ScubaContainerSasUrl,
+    [string]$ScubaContainerSasUrl
 )
 
 $ErrorActionPreference = "Stop"
