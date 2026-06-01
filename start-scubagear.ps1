@@ -38,6 +38,15 @@ $InvokeScubaSasUrl = "$baseUrl/prod/invoke-scubagear.ps1$sasPart"
 # ---------------------------
 
 $root = Join-Path $env:TEMP "nubrix-scubagear"
+
+# Clean any previous staging folder before starting
+try {
+    if (Test-Path -LiteralPath $root) {
+        Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+catch {}
+
 New-Item -Path $root -ItemType Directory -Force | Out-Null
 
 $invokePath = Join-Path $root "invoke-scubagear.ps1"
@@ -86,18 +95,21 @@ function Download-WithSasErrorHandling {
     }
 }
 
-if (-not (Download-WithSasErrorHandling -Uri $InvokeScubaSasUrl -OutFile $invokePath -FriendlyName "invoke-scubagear.ps1")) {
-    exit 1
-}
-
 try {
+    if (-not (Download-WithSasErrorHandling -Uri $InvokeScubaSasUrl -OutFile $invokePath -FriendlyName "invoke-scubagear.ps1")) {
+        exit 1
+    }
+
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File $invokePath
 }
 finally {
+    # Clean up all temporary assessment scripts, including start and invoke files.
     try {
-        if (Test-Path -LiteralPath $invokePath) {
-            Remove-Item -LiteralPath $invokePath -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $root) {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
-    catch {}
+    catch {
+        Write-Warning "Unable to fully clean up temporary assessment files."
+    }
 }
