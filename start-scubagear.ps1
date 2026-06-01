@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
-    [string]$InvokeScubaSasUrl,
+    [string]$ScubaContainerSasUrl,
 
     [switch]$OpenOutput
 )
@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 function Write-Err {
-    param([string]$Message)
+    param([Parameter(Mandatory = $true)][string]$Message)
     Write-Host "[ERROR] $Message"
 }
 
@@ -18,6 +18,26 @@ if ($PSVersionTable.PSEdition -ne "Desktop" -or $PSVersionTable.PSVersion.Major 
     Write-Err "This assessment must be run using Windows PowerShell 5.1. Please open Windows PowerShell, not PowerShell 7 / pwsh."
     exit 1
 }
+
+# ---------------------------
+# Resolve invoke script URL from container SAS
+# ---------------------------
+
+$qIndex = $ScubaContainerSasUrl.IndexOf("?")
+
+if ($qIndex -lt 0) {
+    Write-Err "ScubaContainerSasUrl does not contain a SAS query string ('?'). Please provide a valid container SAS URL."
+    exit 1
+}
+
+$baseUrl = $ScubaContainerSasUrl.Substring(0, $qIndex).TrimEnd("/")
+$sasPart = $ScubaContainerSasUrl.Substring($qIndex)
+
+$InvokeScubaSasUrl = "$baseUrl/prod/invoke-scubagear.ps1$sasPart"
+
+# ---------------------------
+# Local temp paths
+# ---------------------------
 
 $root = Join-Path $env:TEMP "nubrix-scubagear"
 New-Item -Path $root -ItemType Directory -Force | Out-Null
@@ -53,6 +73,9 @@ function Download-WithSasErrorHandling {
 
         if ($msg -match "403|AuthenticationFailed|Authorization") {
             Write-Err "Failed to download $FriendlyName. The link may have expired. Please request a refreshed link and try again."
+        }
+        elseif ($msg -match "409") {
+            Write-Err "Failed to download $FriendlyName. The SAS URL appears to point to the container, but the script could not derive or access the expected blob path: prod/invoke-scubagear.ps1."
         }
         else {
             Write-Err "Failed to download $FriendlyName. $msg"
