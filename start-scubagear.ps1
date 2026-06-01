@@ -3,8 +3,6 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
     [string]$ScubaContainerSasUrl,
-
-    [switch]$OpenOutput
 )
 
 $ErrorActionPreference = "Stop"
@@ -93,13 +91,7 @@ if (-not (Download-WithSasErrorHandling -Uri $InvokeScubaSasUrl -OutFile $invoke
 }
 
 try {
-    $argsToForward = @()
-
-    if ($OpenOutput) {
-        $argsToForward += "-OpenOutput"
-    }
-
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File $invokePath @argsToForward
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File $invokePath
 }
 finally {
     try {
