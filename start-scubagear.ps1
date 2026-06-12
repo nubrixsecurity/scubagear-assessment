@@ -18,7 +18,7 @@ if ($PSVersionTable.PSEdition -ne "Desktop" -or $PSVersionTable.PSVersion.Major 
 }
 
 # ---------------------------
-# Resolve invoke script URL from container SAS
+# Resolve package URL from container SAS
 # ---------------------------
 
 $qIndex = $ScubaContainerSasUrl.IndexOf("?")
@@ -31,25 +31,27 @@ if ($qIndex -lt 0) {
 $baseUrl = $ScubaContainerSasUrl.Substring(0, $qIndex).TrimEnd("/")
 $sasPart = $ScubaContainerSasUrl.Substring($qIndex)
 
-$InvokeScubaSasUrl = "$baseUrl/prod/invoke-scubagear.ps1$sasPart"
+$PackageSasUrl = "$baseUrl/prod/scubagear-prod-package.zip$sasPart"
 
 # ---------------------------
 # Local temp paths
 # ---------------------------
 
 $root = Join-Path $env:TEMP "nubrix-scubagear"
+$packagePath = Join-Path $env:TEMP "nubrix-scubagear-prod-package.zip"
 
-# Clean any previous staging folder before starting
 try {
     if (Test-Path -LiteralPath $root) {
         Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    if (Test-Path -LiteralPath $packagePath) {
+        Remove-Item -LiteralPath $packagePath -Force -ErrorAction SilentlyContinue
     }
 }
 catch {}
 
 New-Item -Path $root -ItemType Directory -Force | Out-Null
-
-$invokePath = Join-Path $root "invoke-scubagear.ps1"
 
 function Download-WithSasErrorHandling {
     param(
@@ -62,10 +64,6 @@ function Download-WithSasErrorHandling {
     $ProgressPreference = "SilentlyContinue"
 
     try {
-        if (Test-Path -LiteralPath $OutFile) {
-            Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
-        }
-
         Invoke-WebRequest -Uri $Uri -OutFile $OutFile -ErrorAction Stop
 
         try {
@@ -81,8 +79,8 @@ function Download-WithSasErrorHandling {
         if ($msg -match "403|AuthenticationFailed|Authorization") {
             Write-Err "Failed to download $FriendlyName. The link may have expired. Please request a refreshed link and try again."
         }
-        elseif ($msg -match "409") {
-            Write-Err "Failed to download $FriendlyName. The SAS URL appears to point to the container, but the script could not derive or access the expected blob path: prod/invoke-scubagear.ps1."
+        elseif ($msg -match "409|404|NotFound") {
+            Write-Err "Failed to download $FriendlyName. Expected blob path: prod/scubagear-prod-package.zip."
         }
         else {
             Write-Err "Failed to download $FriendlyName. $msg"
@@ -96,17 +94,29 @@ function Download-WithSasErrorHandling {
 }
 
 try {
-    if (-not (Download-WithSasErrorHandling -Uri $InvokeScubaSasUrl -OutFile $invokePath -FriendlyName "invoke-scubagear.ps1")) {
+    if (-not (Download-WithSasErrorHandling -Uri $PackageSasUrl -OutFile $packagePath -FriendlyName "scubagear-prod-package.zip")) {
         exit 1
+    }
+
+    Write-Host "Extracting assessment package..."
+    Expand-Archive -LiteralPath $packagePath -DestinationPath $root -Force
+
+    $invokePath = Join-Path $root "invoke-scubagear.ps1"
+
+    if (-not (Test-Path -LiteralPath $invokePath)) {
+        throw "invoke-scubagear.ps1 was not found after extracting the assessment package."
     }
 
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File $invokePath
 }
 finally {
-    # Clean up all temporary assessment scripts, including start and invoke files.
     try {
         if (Test-Path -LiteralPath $root) {
             Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+
+        if (Test-Path -LiteralPath $packagePath) {
+            Remove-Item -LiteralPath $packagePath -Force -ErrorAction SilentlyContinue
         }
     }
     catch {
