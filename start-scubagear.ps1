@@ -17,14 +17,10 @@ if ($PSVersionTable.PSEdition -ne "Desktop" -or $PSVersionTable.PSVersion.Major 
     exit 1
 }
 
-# ---------------------------
-# Resolve package URL from container SAS
-# ---------------------------
-
 $qIndex = $ScubaContainerSasUrl.IndexOf("?")
 
 if ($qIndex -lt 0) {
-    Write-Err "ScubaContainerSasUrl does not contain a SAS query string ('?'). Please provide a valid container SAS URL."
+    Write-Err "ScubaContainerSasUrl does not contain a SAS query string ('?'). Please provide a valid assessment link."
     exit 1
 }
 
@@ -32,10 +28,6 @@ $baseUrl = $ScubaContainerSasUrl.Substring(0, $qIndex).TrimEnd("/")
 $sasPart = $ScubaContainerSasUrl.Substring($qIndex)
 
 $PackageSasUrl = "$baseUrl/prod/scubagear-prod-package.zip$sasPart"
-
-# ---------------------------
-# Local temp paths
-# ---------------------------
 
 $root = Join-Path $env:TEMP "nubrix-scubagear"
 $packagePath = Join-Path $env:TEMP "nubrix-scubagear-prod-package.zip"
@@ -77,10 +69,10 @@ function Download-WithSasErrorHandling {
         $msg = $_.Exception.Message
 
         if ($msg -match "403|AuthenticationFailed|Authorization") {
-            Write-Err "Failed to download $FriendlyName. The link may have expired. Please request a refreshed link and try again."
+            Write-Err "Failed to download $FriendlyName. The assessment link may have expired. Please request a refreshed link and try again."
         }
         elseif ($msg -match "409|404|NotFound") {
-            Write-Err "Failed to download $FriendlyName. Expected blob path: prod/scubagear-prod-package.zip."
+            Write-Err "Failed to download $FriendlyName. The assessment package could not be found."
         }
         else {
             Write-Err "Failed to download $FriendlyName. $msg"
@@ -94,17 +86,18 @@ function Download-WithSasErrorHandling {
 }
 
 try {
-    if (-not (Download-WithSasErrorHandling -Uri $PackageSasUrl -OutFile $packagePath -FriendlyName "scubagear-prod-package.zip")) {
+    Write-Host "Extracting assessment package..."
+
+    if (-not (Download-WithSasErrorHandling -Uri $PackageSasUrl -OutFile $packagePath -FriendlyName "assessment package")) {
         exit 1
     }
 
-    Write-Host "Extracting assessment package..."
     Expand-Archive -LiteralPath $packagePath -DestinationPath $root -Force
 
     $invokePath = Join-Path $root "invoke-scubagear.ps1"
 
     if (-not (Test-Path -LiteralPath $invokePath)) {
-        throw "invoke-scubagear.ps1 was not found after extracting the assessment package."
+        throw "The assessment package is missing a required component. Please request a refreshed package and try again."
     }
 
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File $invokePath
